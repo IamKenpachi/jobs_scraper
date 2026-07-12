@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 import asyncio
 import pandas as pd
 import requests
@@ -44,8 +46,11 @@ async def scrape_reed(search_query="graduate data analyst", headless=True):
         })
         
     df = pd.DataFrame(jobs_data)
-    df.to_csv("reed_data.csv", index=False)
-    print("Saved Reed API data to reed_data.csv.")
+    os.makedirs("output", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"output/reed_{timestamp}.csv"
+    df.to_csv(filename, index=False)
+    print(f"Saved final data to {filename}.")
 
 if __name__ == "__main__":
     asyncio.run(scrape_reed())

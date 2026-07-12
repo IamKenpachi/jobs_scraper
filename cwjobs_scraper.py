@@ -1,3 +1,5 @@
+import os
+from datetime import datetime
 import asyncio
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -108,8 +110,11 @@ async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
             
     if jobs_data:
         df = pd.DataFrame(jobs_data)
-        df.to_csv("cwjobs_data.csv", index=False)
-        print("Saved final data to cwjobs_data.csv.")
+        os.makedirs("output", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"output/cwjobs_{timestamp}.csv"
+        df.to_csv(filename, index=False)
+        print(f"Saved final data to {filename}.")
     else:
         print("No data extracted. Check cwjobs_debug.html")
 
