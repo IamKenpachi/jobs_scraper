@@ -128,7 +128,8 @@ async def scrape_targetjobs(search_query="data", headless=True):
         
         await browser.close()
         
-    df = pd.DataFrame(jobs_data)
-    df.to_csv("targetjobs_data.csv", index=False)
-    print("Saved final data with descriptions to targetjobs_data.csv.")
+    init_db()
+    for job in jobs_data:
+        save_job_to_db(job, "targetjobs")
+    print("Saved final data to database.")
 

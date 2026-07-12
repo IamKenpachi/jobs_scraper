@@ -71,9 +71,10 @@ def scrape_jooble(
         except ValidationError as e:
             print(f"Validation error for job: {e}")
         
-    df = pd.DataFrame(jobs_data)
-    df.to_csv("jooble_data.csv", index=False)
-    print("Saved Jooble API data to jooble_data.csv.")
+    init_db()
+    for job in jobs_data:
+        save_job_to_db(job, "jooble")
+    print("Saved Jooble API data to database.")
 
 if __name__ == "__main__":
     asyncio.run(scrape_jooble())
