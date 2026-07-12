@@ -1,3 +1,4 @@
+from database import init_db, save_job_to_db
 from models import JobListing
 from pydantic import ValidationError
 import os

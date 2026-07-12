@@ -1,3 +1,4 @@
+from database import init_db, save_job_to_db
 from models import JobListing
 from pydantic import ValidationError
 import os
@@ -51,12 +52,16 @@ async def scrape_reed(search_query="graduate data analyst", headless=True):
         except ValidationError as e:
             print(f"Validation error for job: {e}")
         
-    df = pd.DataFrame(jobs_data)
-    os.makedirs("output", exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"output/reed_{timestamp}.csv"
-    df.to_csv(filename, index=False)
-    print(f"Saved final data to {filename}.")
+    init_db()
+
+        
+    for job in jobs_data:
+
+        
+        save_job_to_db(job, "reed")
+
+        
+    print(f"Saved {len(jobs_data)} jobs to database.")
 
 if __name__ == "__main__":
     asyncio.run(scrape_reed())

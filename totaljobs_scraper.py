@@ -1,100 +1,59 @@
+import asyncio
+from curl_cffi import requests
+from bs4 import BeautifulSoup
 from models import JobListing
 from pydantic import ValidationError
-import os
-from datetime import datetime
-import asyncio
-import pandas as pd
-from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
-from playwright_stealth import Stealth
+from database import init_db, save_job_to_db
 
-async def scrape_totaljobs(search_query="graduate data analyst", headless=True):
-    url = "https://www.totaljobs.com/"
+async def scrape_totaljobs(query, headed=False):
+    print(f"Starting Totaljobs scraper (Stealth Mode) for query: '{query}'...")
     
-    async with async_playwright() as p:
-        # Launching Firefox to bypass some basic bot protections
-        browser = await p.firefox.launch(headless=headless)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+    # We ignore the 'headed' flag since we are completely bypassing the browser
+    # using curl_cffi to perfectly mimic Google Chrome's TLS fingerprint.
+    
+    formatted_query = query.replace(" ", "-")
+    url = f"https://www.totaljobs.com/jobs/{formatted_query}"
+    
+    try:
+        # We use asyncio.to_thread because curl_cffi.requests is synchronous
+        response = await asyncio.to_thread(
+            requests.get,
+            url,
+            impersonate="chrome110",
+            timeout=15
         )
-        page = await context.new_page()
-        await Stealth().apply_stealth_async(page)
         
-        print(f"Navigating to {url}...")
-        try:
-            await page.goto(url, wait_until='domcontentloaded')
-            # Wait for any potential anti-bot checks or cookie banners
-            await page.wait_for_timeout(3000)
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        jobs_data = []
+        
+        # StepStone network uses <article> tags or specific data-test-ids
+        articles = soup.find_all("article")
+        if not articles:
+            # Fallback for dynamic rendering if article tags aren't present
+            articles = soup.find_all("div", class_=lambda c: c and "job-card" in c.lower())
             
-            # Try to accept cookies if the button exists
-            try:
-                # StepStone usually uses 'ccm-widget' or 'onetrust' for cookies
-                await page.click("text=Accept All", timeout=2000)
-                await page.wait_for_timeout(1000)
-            except Exception:
-                pass
+        for article in articles:
+            title_tag = article.find("h2") or article.find("a")
+            job_title = title_tag.text.strip() if title_tag else ""
+            
+            job_url = ""
+            if title_tag and title_tag.name == "a":
+                job_url = title_tag.get("href", "")
+            elif title_tag:
+                link = title_tag.find("a")
+                job_url = link.get("href", "") if link else ""
                 
-            print(f"Typing search query '{search_query}'...")
-            
-            # Locate the search bar. This handles a few common Stepstone/Totaljobs IDs
-            search_input_selectors = [
-                "input[name='keywords']",
-                "input[id*='keywords']",
-                "input[placeholder*='Job title']",
-                "input[type='text']"
-            ]
-            
-            input_found = False
-            for selector in search_input_selectors:
-                if await page.locator(selector).count() > 0:
-                    await page.fill(selector, search_query)
-                    input_found = True
-                    break
-                    
-            if not input_found:
-                print("Could not find search bar. Dumping HTML for inspection.")
-                with open("totaljobs_debug.html", "w", encoding="utf-8") as f:
-                    f.write(await page.content())
-                await browser.close()
-                return
-
-            print("Submitting search...")
-            await page.keyboard.press("Enter")
-            
-            # Wait for search results to load
-            await page.wait_for_timeout(5000)
-            
-            # Save debug HTML to see what the results look like
-            html = await page.content()
-            with open("totaljobs_debug.html", "w", encoding="utf-8") as f:
-                f.write(html)
+            if job_url and not job_url.startswith("http"):
+                job_url = "https://www.totaljobs.com" + job_url
                 
-            soup = BeautifulSoup(html, 'html.parser')
+            company_tag = article.find("li", class_=lambda c: c and "company" in c.lower()) or article.find("span", attrs={"data-at": "job-item-company-name"})
+            company = company_tag.text.strip() if company_tag else ""
             
-            # Find job cards. Usually <article> or divs with specific classes
-            job_articles = soup.find_all('article')
-            if not job_articles:
-                print("No <article> tags found, looking for job cards...")
-                # Fallback: look for common card divs
-                job_articles = soup.find_all('div', class_=lambda x: x and 'job-card' in x.lower())
-                
-            print(f"Found {len(job_articles)} potential job listings on Totaljobs.")
+            snippet_tag = article.find("div", class_=lambda c: c and "snippet" in c.lower())
+            snippet = snippet_tag.text.strip() if snippet_tag else ""
             
-            jobs_data = []
-            
-            for article in job_articles:
-                title_elem = article.find(['h2', 'h3'])
-                job_title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
-                
-                link_elem = article.find('a', href=True)
-                job_url = link_elem['href'] if link_elem else ""
-                if job_url and job_url.startswith('/'):
-                    job_url = "https://www.totaljobs.com" + job_url
-                    
-                # The text chunks will contain company, location, salary etc
-                text_chunks = [t for t in article.stripped_strings]
-                company = text_chunks[1] if len(text_chunks) > 1 else ""
-                
+            if job_title:
                 try:
                     job_model = JobListing(
                         title=job_title or "Unknown Title",
@@ -103,26 +62,18 @@ async def scrape_totaljobs(search_query="graduate data analyst", headless=True):
                         salary="",
                         deadline="",
                         url=job_url or "https://totaljobs.com",
-                        description=" ".join(text_chunks[:5])
+                        description=snippet
                     )
                     jobs_data.append(job_model.to_dict())
                 except ValidationError as e:
                     print(f"Validation error for job: {e}")
-                
-        except Exception as e:
-            print(f"Error during Totaljobs scraping: {e}")
-        finally:
-            await browser.close()
-            
-    if jobs_data:
-        df = pd.DataFrame(jobs_data)
-        os.makedirs("output", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"output/totaljobs_{timestamp}.csv"
-        df.to_csv(filename, index=False)
-        print(f"Saved final data to {filename}.")
-    else:
-        print("No data extracted. Check totaljobs_debug.html")
-
-if __name__ == "__main__":
-    asyncio.run(scrape_totaljobs())
+                    
+        print(f"Found {len(jobs_data)} jobs via Totaljobs stealth requests.")
+        
+        init_db()
+        for job in jobs_data:
+            save_job_to_db(job, "totaljobs")
+        print(f"Saved {len(jobs_data)} jobs to database.")
+        
+    except Exception as e:
+        print(f"Error scraping Totaljobs: {e}")

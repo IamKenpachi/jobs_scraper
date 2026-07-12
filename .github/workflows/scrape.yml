@@ -1,0 +1,36 @@
+name: Daily Jobs Scraper
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # Runs at 08:00 UTC every day
+  workflow_dispatch:      # Allows manual triggering
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install firefox
+
+      - name: Run ALL scrapers concurrently
+        run: python main.py --site all
+
+      - name: Commit and push Database updates
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add output/jobs.db
+          git commit -m "Automated daily job scrape database update [skip ci]" || exit 0
+          git push
