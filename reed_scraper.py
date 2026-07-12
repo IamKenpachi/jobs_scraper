@@ -7,7 +7,7 @@ import asyncio
 import pandas as pd
 import requests
 
-async def scrape_reed(search_query="graduate data analyst", headless=True):
+def scrape_reed(search_query="graduate data analyst", headless=True):
     api_key = '5f27214b-746f-48db-b79c-ce987f4b0a10'
 
     base_url = 'https://www.reed.co.uk/api/1.0/search'

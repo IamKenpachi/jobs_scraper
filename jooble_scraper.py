@@ -9,7 +9,7 @@ import requests
 import json
 import sys
 
-async def scrape_jooble(
+def scrape_jooble(
     search_query="graduate data analyst", 
     location="UK", 
     radius=80, 
