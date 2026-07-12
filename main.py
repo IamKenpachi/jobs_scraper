@@ -3,42 +3,41 @@ import asyncio
 import sys
 
 def main():
-    parser = argparse.ArgumentParser(description="Web scraper for job listings.")
+    parser = argparse.ArgumentParser(description="Jobs Scraper CLI")
     parser.add_argument(
         '--site', 
         type=str, 
         required=True, 
-        choices=['targetjobs', 'jooble'], 
-        help="The target website to scrape (targetjobs or jooble)"
+        choices=['targetjobs', 'jooble', 'reed'], 
+        help="The website to scrape (targetjobs, jooble, or reed)"
     )
     parser.add_argument(
         '--query', 
         type=str, 
-        default='data analyst', 
-        help="The search query for job listings (default: 'data analyst')"
+        default="graduate data analyst", 
+        help="The search query (default: 'graduate data analyst')"
     )
     parser.add_argument(
-        '--headless', 
+        '--headed', 
         action='store_true', 
-        default=True, 
-        help="Run the scraper in headless mode (default: True)"
+        help="Run the browser in headed mode (visible) to solve CAPTCHAs manually."
     )
     
     args = parser.parse_args()
-
+    
+    headless = not args.headed
+    
+    print(f"Starting {args.site.capitalize()} scraper for query: '{args.query}'...")
+    
     if args.site == 'targetjobs':
         from targetjobs_scraper import scrape_targetjobs
-        print(f"Starting TargetJobs scraper for query: '{args.query}'...")
-        asyncio.run(scrape_targetjobs(search_query=args.query, headless=args.headless))
-        
+        asyncio.run(scrape_targetjobs(search_query=args.query, headless=headless))
     elif args.site == 'jooble':
         from jooble_scraper import scrape_jooble
-        print(f"Starting Jooble scraper for query: '{args.query}'...")
-        asyncio.run(scrape_jooble(search_query=args.query, headless=args.headless))
-        
-    else:
-        print(f"Unknown site: {args.site}")
-        sys.exit(1)
+        asyncio.run(scrape_jooble(search_query=args.query, headless=headless))
+    elif args.site == 'reed':
+        from reed_scraper import scrape_reed
+        asyncio.run(scrape_reed(search_query=args.query, headless=headless))
 
 if __name__ == "__main__":
     main()
