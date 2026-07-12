@@ -8,8 +8,8 @@ def main():
         '--site', 
         type=str, 
         required=True, 
-        choices=['targetjobs', 'jooble', 'reed', 'milkround'], 
-        help="The website to scrape (targetjobs, jooble, reed, or milkround)"
+        choices=['targetjobs', 'jooble', 'reed', 'milkround', 'cwjobs'], 
+        help="The website to scrape (targetjobs, jooble, reed, milkround, or cwjobs)"
     )
     parser.add_argument(
         '--query', 
@@ -41,6 +41,9 @@ def main():
     elif args.site == 'milkround':
         from milkround_scraper import scrape_milkround
         asyncio.run(scrape_milkround(search_query=args.query, headless=headless))
+    elif args.site == 'cwjobs':
+        from cwjobs_scraper import scrape_cwjobs
+        asyncio.run(scrape_cwjobs(search_query=args.query, headless=headless))
 
 if __name__ == "__main__":
     main()
