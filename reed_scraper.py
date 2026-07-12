@@ -1,40 +1,47 @@
-from database import init_db, save_job_to_db
+import os
+import logging
+import requests
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from database import init_db, bulk_upsert_jobs
 from models import JobListing
 from pydantic import ValidationError
-import os
-from datetime import datetime
-import asyncio
-import pandas as pd
-import requests
 
-def scrape_reed(search_query="graduate data analyst", headless=True):
-    api_key = '5f27214b-746f-48db-b79c-ce987f4b0a10'
+logger = logging.getLogger(__name__)
 
+@retry(
+    wait=wait_exponential(multiplier=1, max=30),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type(requests.exceptions.RequestException)
+)
+def fetch_reed_jobs(api_key, params):
     base_url = 'https://www.reed.co.uk/api/1.0/search'
+    response = requests.get(base_url, params=params, auth=(api_key, ''))
+    response.raise_for_status()
+    return response.json()
 
-    # Search parameters mapping
+def scrape_reed(search_query="graduate data analyst"):
+    # Read API key from environment variables (fallback to hardcoded for legacy)
+    api_key = os.environ.get("REED_API_KEY", "5f27214b-746f-48db-b79c-ce987f4b0a10")
+
     params = {
         'keywords': search_query,
         'resultsToTake': 100
     }
 
-    print(f"Making API request to Reed for query: '{search_query}'...")
+    logger.info(f"Making API request to Reed for query: '{search_query}'...")
     
     try:
-        # Reed API uses Basic Auth with the API key as the username and an empty password
-        response = requests.get(base_url, params=params, auth=(api_key, ''))
-        response.raise_for_status()
-        data = response.json()
+        data = fetch_reed_jobs(api_key, params)
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching data from Reed API: {e}")
+        logger.error(f"Error fetching data from Reed API after retries: {e}")
         return
         
     jobs = data.get("results", [])
     if not jobs:
-        print("No jobs found via API.")
+        logger.info("No jobs found via API.")
         return
         
-    print(f"Found {len(jobs)} jobs via Reed API.")
+    logger.info(f"Found {len(jobs)} jobs via Reed API.")
     
     jobs_data = []
     for job in jobs:
@@ -50,18 +57,10 @@ def scrape_reed(search_query="graduate data analyst", headless=True):
             )
             jobs_data.append(job_model.to_dict())
         except ValidationError as e:
-            print(f"Validation error for job: {e}")
+            logger.warning(f"Validation error for job: {e}")
         
     init_db()
-
-        
-    for job in jobs_data:
-
-        
-        save_job_to_db(job, "reed")
-
-        
-    print(f"Saved {len(jobs_data)} jobs to database.")
+    bulk_upsert_jobs(jobs_data, "reed")
 
 if __name__ == "__main__":
-    asyncio.run(scrape_reed())
+    scrape_reed()

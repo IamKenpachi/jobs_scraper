@@ -1,5 +1,9 @@
-venv/
 __pycache__/
 *.pyc
-*.csv
-.DS_Store
+*_debug.html
+venv/
+output/jobs.db
+fix_*.py
+refactor_*.py
+test_*.py
+.env

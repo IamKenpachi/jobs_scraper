@@ -1,16 +1,18 @@
-from database import init_db, save_job_to_db
+import logging
+from database import init_db, bulk_upsert_jobs
 from models import JobListing
 from pydantic import ValidationError
-import os
-from datetime import datetime
 import asyncio
-import pandas as pd
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 
+logger = logging.getLogger(__name__)
+
 async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
     url = "https://www.cwjobs.co.uk/"
+    
+    jobs_data = [] # Initialize early to avoid NameError
     
     async with async_playwright() as p:
         # Launching Firefox to bypass some basic bot protections
@@ -21,7 +23,7 @@ async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
         page = await context.new_page()
         await Stealth().apply_stealth_async(page)
         
-        print(f"Navigating to {url}...")
+        logger.info(f"Navigating to {url}...")
         try:
             await page.goto(url, wait_until='domcontentloaded')
             # Wait for any potential anti-bot checks or cookie banners
@@ -35,7 +37,7 @@ async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
             except Exception:
                 pass
                 
-            print(f"Typing search query '{search_query}'...")
+            logger.info(f"Typing search query '{search_query}'...")
             
             # Locate the search bar. This handles a few common Stepstone/CWJobs IDs
             search_input_selectors = [
@@ -53,35 +55,27 @@ async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
                     break
                     
             if not input_found:
-                print("Could not find search bar. Dumping HTML for inspection.")
-                with open("cwjobs_debug.html", "w", encoding="utf-8") as f:
-                    f.write(await page.content())
+                logger.error("Could not find search bar.")
                 await browser.close()
                 return
 
-            print("Submitting search...")
+            logger.info("Submitting search...")
             await page.keyboard.press("Enter")
             
             # Wait for search results to load
             await page.wait_for_timeout(5000)
             
-            # Save debug HTML to see what the results look like
             html = await page.content()
-            with open("cwjobs_debug.html", "w", encoding="utf-8") as f:
-                f.write(html)
-                
             soup = BeautifulSoup(html, 'html.parser')
             
             # Find job cards. Usually <article> or divs with specific classes
             job_articles = soup.find_all('article')
             if not job_articles:
-                print("No <article> tags found, looking for job cards...")
+                logger.info("No <article> tags found, looking for job cards...")
                 # Fallback: look for common card divs
                 job_articles = soup.find_all('div', class_=lambda x: x and 'job-card' in x.lower())
                 
-            print(f"Found {len(job_articles)} potential job listings on CWJobs.")
-            
-            jobs_data = []
+            logger.info(f"Found {len(job_articles)} potential job listings on CWJobs.")
             
             for article in job_articles:
                 title_elem = article.find(['h2', 'h3'])
@@ -90,7 +84,7 @@ async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
                 link_elem = article.find('a', href=True)
                 job_url = link_elem['href'] if link_elem else ""
                 if job_url and job_url.startswith('/'):
-                    job_url = "https://www.cwjobs.com" + job_url
+                    job_url = "https://www.cwjobs.co.uk" + job_url
                     
                 # The text chunks will contain company, location, salary etc
                 text_chunks = [t for t in article.stripped_strings]
@@ -103,28 +97,23 @@ async def scrape_cwjobs(search_query="graduate data analyst", headless=True):
                         location="",
                         salary="",
                         deadline="",
-                        url=job_url or "https://totaljobs.com",
+                        url=job_url or "https://www.cwjobs.co.uk",
                         description=" ".join(text_chunks[:5])
                     )
                     jobs_data.append(job_model.to_dict())
                 except ValidationError as e:
-                    print(f"Validation error for job: {e}")
+                    logger.warning(f"Validation error for job: {e}")
                 
         except Exception as e:
-            print(f"Error during CWJobs scraping: {e}")
+            logger.error(f"Error during CWJobs scraping: {e}")
         finally:
             await browser.close()
             
     if jobs_data:
         init_db()
-
-        for job in jobs_data:
-
-            save_job_to_db(job, "cwjobs")
-
-        print(f"Saved {len(jobs_data)} jobs to database.")
+        bulk_upsert_jobs(jobs_data, "cwjobs")
     else:
-        print("No data extracted. Check cwjobs_debug.html")
+        logger.info("No data extracted from CWJobs.")
 
 if __name__ == "__main__":
     asyncio.run(scrape_cwjobs())

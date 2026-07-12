@@ -1,13 +1,23 @@
-from database import init_db, save_job_to_db
+import os
+import json
+import logging
+import requests
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from database import init_db, bulk_upsert_jobs
 from models import JobListing
 from pydantic import ValidationError
-import os
-from datetime import datetime
-import asyncio
-import pandas as pd
-import requests
-import json
-import sys
+
+logger = logging.getLogger(__name__)
+
+@retry(
+    wait=wait_exponential(multiplier=1, max=30),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type(requests.exceptions.RequestException)
+)
+def fetch_jooble_jobs(api_url, payload, headers):
+    response = requests.post(api_url, data=json.dumps(payload), headers=headers)
+    response.raise_for_status()
+    return response.json()
 
 def scrape_jooble(
     search_query="graduate data analyst", 
@@ -16,10 +26,9 @@ def scrape_jooble(
     salary=None,
     page=1,
     result_on_page=100,
-    company_search=False,
-    headless=True
+    company_search=False
 ):
-    api_key = 'f51b8bbe-8cf9-48ff-8fd7-9101ba1ffe91'
+    api_key = os.environ.get("JOOBLE_API_KEY", "f51b8bbe-8cf9-48ff-8fd7-9101ba1ffe91")
     api_url = f'https://jooble.org/api/{api_key}'
     
     payload = {
@@ -38,22 +47,20 @@ def scrape_jooble(
         'Content-Type': 'application/json'
     }
     
-    print(f"Making API request to Jooble for query: '{search_query}'...")
+    logger.info(f"Making API request to Jooble for query: '{search_query}'...")
     
     try:
-        response = requests.post(api_url, data=json.dumps(payload), headers=headers)
-        response.raise_for_status()
-        data = response.json()
+        data = fetch_jooble_jobs(api_url, payload, headers)
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching data from Jooble API: {e}")
+        logger.error(f"Error fetching data from Jooble API after retries: {e}")
         return
         
     jobs = data.get("jobs", [])
     if not jobs:
-        print("No jobs found via API.")
+        logger.info("No jobs found via API.")
         return
         
-    print(f"Found {len(jobs)} jobs via Jooble API.")
+    logger.info(f"Found {len(jobs)} jobs via Jooble API.")
     
     jobs_data = []
     for job in jobs:
@@ -69,13 +76,10 @@ def scrape_jooble(
             )
             jobs_data.append(job_model.to_dict())
         except ValidationError as e:
-            print(f"Validation error for job: {e}")
+            logger.warning(f"Validation error for job: {e}")
         
     init_db()
-    for job in jobs_data:
-        save_job_to_db(job, "jooble")
-    print("Saved Jooble API data to database.")
+    bulk_upsert_jobs(jobs_data, "jooble")
 
 if __name__ == "__main__":
-    asyncio.run(scrape_jooble())
-
+    scrape_jooble()

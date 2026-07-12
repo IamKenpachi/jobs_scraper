@@ -1,5 +1,4 @@
 from pydantic import BaseModel, HttpUrl, Field
-from typing import Optional
 
 class JobListing(BaseModel):
     title: str = Field(..., description="The title of the job position")
