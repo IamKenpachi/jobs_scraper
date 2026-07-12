@@ -1,3 +1,5 @@
+from models import JobListing
+from pydantic import ValidationError
 import os
 from datetime import datetime
 import asyncio

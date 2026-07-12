@@ -1,3 +1,5 @@
+from models import JobListing
+from pydantic import ValidationError
 import os
 from datetime import datetime
 import asyncio
@@ -35,15 +37,19 @@ async def scrape_reed(search_query="graduate data analyst", headless=True):
     
     jobs_data = []
     for job in jobs:
-        jobs_data.append({
-            "Job Title": job.get("jobTitle", ""),
-            "Company": job.get("employerName", ""),
-            "Location": job.get("locationName", ""),
-            "Salary": f"£{job.get('minimumSalary', '')} - £{job.get('maximumSalary', '')}",
-            "Deadline": job.get("expirationDate", ""),
-            "URL": job.get("jobUrl", ""),
-            "Description": job.get("jobDescription", "")
-        })
+        try:
+            job_model = JobListing(
+                title=job.get("jobTitle", "Unknown Title"),
+                company=job.get("employerName", "Unknown Company"),
+                location=job.get("locationName", ""),
+                salary=f"£{job.get('minimumSalary', '')} - £{job.get('maximumSalary', '')}",
+                deadline=job.get("expirationDate", "") or "",
+                url=job.get("jobUrl", "https://reed.co.uk"),
+                description=job.get("jobDescription", "")
+            )
+            jobs_data.append(job_model.to_dict())
+        except ValidationError as e:
+            print(f"Validation error for job: {e}")
         
     df = pd.DataFrame(jobs_data)
     os.makedirs("output", exist_ok=True)

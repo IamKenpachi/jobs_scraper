@@ -1,3 +1,5 @@
+from models import JobListing
+from pydantic import ValidationError
 import os
 from datetime import datetime
 import asyncio
@@ -93,15 +95,19 @@ async def scrape_milkround(search_query="graduate data analyst", headless=True):
                 text_chunks = [t for t in article.stripped_strings]
                 company = text_chunks[1] if len(text_chunks) > 1 else ""
                 
-                jobs_data.append({
-                    "Job Title": job_title,
-                    "Company": company,
-                    "Location": "",
-                    "Salary": "",
-                    "Deadline": "",
-                    "URL": job_url,
-                    "Description": " ".join(text_chunks[:5]) # Simple snippet
-                })
+                try:
+                    job_model = JobListing(
+                        title=job_title or "Unknown Title",
+                        company=company or "Unknown Company",
+                        location="",
+                        salary="",
+                        deadline="",
+                        url=job_url or "https://totaljobs.com",
+                        description=" ".join(text_chunks[:5])
+                    )
+                    jobs_data.append(job_model.to_dict())
+                except ValidationError as e:
+                    print(f"Validation error for job: {e}")
                 
         except Exception as e:
             print(f"Error during Milkround scraping: {e}")

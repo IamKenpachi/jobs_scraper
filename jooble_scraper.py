@@ -1,3 +1,5 @@
+from models import JobListing
+from pydantic import ValidationError
 import os
 from datetime import datetime
 import asyncio
@@ -54,15 +56,19 @@ async def scrape_jooble(
     
     jobs_data = []
     for job in jobs:
-        jobs_data.append({
-            "Job Title": job.get("title", ""),
-            "Company": job.get("company", ""),
-            "Location": job.get("location", ""),
-            "Salary": job.get("salary", ""),
-            "Deadline": "",
-            "URL": job.get("link", ""),
-            "Description": job.get("snippet", "")
-        })
+        try:
+            job_model = JobListing(
+                title=job.get("title", "Unknown Title"),
+                company=job.get("company", "Unknown Company"),
+                location=job.get("location", ""),
+                salary=job.get("salary", ""),
+                deadline="",
+                url=job.get("link", "https://jooble.org"),
+                description=job.get("snippet", "")
+            )
+            jobs_data.append(job_model.to_dict())
+        except ValidationError as e:
+            print(f"Validation error for job: {e}")
         
     df = pd.DataFrame(jobs_data)
     df.to_csv("jooble_data.csv", index=False)
