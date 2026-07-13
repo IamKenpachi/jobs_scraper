@@ -3,10 +3,11 @@ from database import init_db, bulk_upsert_jobs
 import asyncio
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
+from utils import export_jobs_to_csv
 
 logger = logging.getLogger(__name__)
 
-async def scrape_targetjobs(search_query="data", headless=True):
+async def scrape_targetjobs(search_query="data", headless=True, export_csv=False):
     url = f"https://targetjobs.co.uk/search/jobs?search={search_query}"
     
     jobs_data = []
@@ -102,6 +103,8 @@ async def scrape_targetjobs(search_query="data", headless=True):
         
     init_db()
     bulk_upsert_jobs(jobs_data, "targetjobs")
+    if export_csv:
+        export_jobs_to_csv(jobs_data, "targetjobs")
 
 if __name__ == "__main__":
     asyncio.run(scrape_targetjobs())

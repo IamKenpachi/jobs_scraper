@@ -6,10 +6,11 @@ import asyncio
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
+from utils import export_jobs_to_csv
 
 logger = logging.getLogger(__name__)
 
-async def scrape_milkround(search_query="graduate data analyst", headless=True):
+async def scrape_milkround(search_query="graduate data analyst", headless=True, export_csv=False):
     url = "https://www.milkround.com/"
     
     jobs_data = []  # Initialize early to avoid NameError
@@ -113,6 +114,8 @@ async def scrape_milkround(search_query="graduate data analyst", headless=True):
     if jobs_data:
         init_db()
         bulk_upsert_jobs(jobs_data, "milkround")
+        if export_csv:
+            export_jobs_to_csv(jobs_data, "milkround")
     else:
         logger.info("No data extracted from Milkround.")
 

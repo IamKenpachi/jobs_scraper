@@ -5,6 +5,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 from database import init_db, bulk_upsert_jobs
 from models import JobListing
 from pydantic import ValidationError
+from utils import export_jobs_to_csv
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ def fetch_reed_jobs(api_key, params):
     response.raise_for_status()
     return response.json()
 
-def scrape_reed(search_query="graduate data analyst"):
+def scrape_reed(search_query="graduate data analyst", export_csv=False):
     # Read API key from environment variables (fallback to hardcoded for legacy)
     api_key = os.environ.get("REED_API_KEY", "5f27214b-746f-48db-b79c-ce987f4b0a10")
 
@@ -61,6 +62,8 @@ def scrape_reed(search_query="graduate data analyst"):
         
     init_db()
     bulk_upsert_jobs(jobs_data, "reed")
+    if export_csv:
+        export_jobs_to_csv(jobs_data, "reed")
 
 if __name__ == "__main__":
     scrape_reed()

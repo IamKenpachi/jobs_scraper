@@ -6,6 +6,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 from database import init_db, bulk_upsert_jobs
 from models import JobListing
 from pydantic import ValidationError
+from utils import export_jobs_to_csv
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ def scrape_jooble(
     salary=None,
     page=1,
     result_on_page=100,
-    company_search=False
+    company_search=False,
+    export_csv=False
 ):
     api_key = os.environ.get("JOOBLE_API_KEY", "f51b8bbe-8cf9-48ff-8fd7-9101ba1ffe91")
     api_url = f'https://jooble.org/api/{api_key}'
@@ -80,6 +82,8 @@ def scrape_jooble(
         
     init_db()
     bulk_upsert_jobs(jobs_data, "jooble")
+    if export_csv:
+        export_jobs_to_csv(jobs_data, "jooble")
 
 if __name__ == "__main__":
     scrape_jooble()
