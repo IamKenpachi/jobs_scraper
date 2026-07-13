@@ -55,6 +55,9 @@ The scraper is entirely controlled via `main.py`. It accepts three main flags to
 *   `--query` *(Optional)*
     *   **What it does:** The job title or keyword you are searching for. If your search is multiple words, wrap it in quotation marks!
     *   **Default value:** `"graduate data analyst"`
+*   `--csv` *(Optional)*
+    *   **What it does:** Generates a timestamped CSV file (e.g. `output/reed_2026-07-13.csv`) alongside saving to the SQLite database.
+    *   **When to use it:** When you want raw CSV files exported for immediate analysis in Excel or other tools instead of querying the SQLite DB.
 *   `--headed` *(Optional)*
     *   **What it does:** Forces the Playwright browser to open visibly on your screen instead of running invisibly in the background.
     *   **When to use it:** Use this flag if the scraper is failing to return jobs because it is being blocked by a CAPTCHA. This allows you to manually click the CAPTCHA like a real human.
@@ -63,10 +66,10 @@ The scraper is entirely controlled via `main.py`. It accepts three main flags to
 
 ## 🎯 Examples
 
-### Example 1: Concurrent Scrape (The fastest way)
-Scrape all 5 platforms at exactly the same time. The CLI will report a summary of successes/failures at the end.
+### Example 1: Concurrent Scrape with CSV Export (The fastest way)
+Scrape all 5 platforms at exactly the same time, saving to SQLite and exporting a CSV for each.
 ```bash
-python main.py --site all --query "data analyst"
+python main.py --site all --csv
 ```
 
 ### Example 2: Basic Scrape (Background/Headless)
